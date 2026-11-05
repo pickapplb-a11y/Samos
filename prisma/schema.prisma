@@ -1,0 +1,310 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum HoodieStyle {
+  OVERSIZED
+  REGULAR
+  ZIP
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  DESIGN_REVIEW
+  PRINTING
+  READY
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  COD
+  CARD
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  REFUNDED
+  FAILED
+}
+
+enum AssetKind {
+  UPLOAD
+  AI
+  PRINT
+  PREVIEW
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  phone        String?
+  role         Role      @default(CUSTOMER)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  addresses    Address[]
+  orders       Order[]
+  designs      Design[]
+  assets       Asset[]
+  reviews      Review[]
+}
+
+model Address {
+  id         String  @id @default(cuid())
+  userId     String
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label      String  @default("Home")
+  fullName   String
+  phone      String
+  line1      String
+  line2      String?
+  city       String
+  region     String?
+  postalCode String?
+  country    String
+  isDefault  Boolean @default(false)
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  slug     String    @unique
+  name     String
+  products Product[]
+}
+
+model Product {
+  id           String              @id @default(cuid())
+  slug         String              @unique
+  name         String
+  tagline      String              @default("")
+  description  String
+  style        HoodieStyle
+  basePrice    Int // cents
+  compareAt    Int?
+  material     String
+  fit          String
+  care         String
+  images       String[]
+  customizable Boolean             @default(true)
+  active       Boolean             @default(true)
+  featured     Boolean             @default(false)
+  popularity   Int                 @default(0)
+  categoryId   String?
+  category     Category?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  colors       ProductColor[]
+  variants     Variant[]
+  reviews      Review[]
+  collections  CollectionProduct[]
+  orderItems   OrderItem[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+}
+
+model ProductColor {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  hex       String
+  position  Int     @default(0)
+}
+
+model Variant {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  colorHex  String
+  size      String
+  stock     Int     @default(0)
+  sku       String  @unique
+
+  @@unique([productId, colorHex, size])
+}
+
+model Collection {
+  id        String              @id @default(cuid())
+  slug      String              @unique
+  title     String
+  subtitle  String              @default("")
+  image     String
+  position  Int                 @default(0)
+  active    Boolean             @default(true)
+  products  CollectionProduct[]
+}
+
+model CollectionProduct {
+  collectionId String
+  productId    String
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, productId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name      String
+  rating    Int
+  title     String
+  body      String
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+/// Key/value store for configurable prices and site settings.
+model Setting {
+  key   String @id
+  value Json
+}
+
+model Asset {
+  id        String    @id @default(cuid())
+  key       String    @unique
+  kind      AssetKind
+  mime      String
+  size      Int
+  width     Int?
+  height    Int?
+  ownerId   String?
+  owner     User?     @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  guestId   String?
+  meta      Json?
+  createdAt DateTime  @default(now())
+}
+
+model Design {
+  id          String      @id @default(cuid())
+  name        String      @default("Untitled design")
+  userId      String?
+  user        User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestId     String?
+  productId   String?
+  style       HoodieStyle
+  colorHex    String
+  colorName   String
+  layers      Json
+  /// zone -> asset id of the print-ready PNG for the current revision
+  renders     Json?
+  previewId   String?
+  revision    Int         @default(1)
+  isPublic    Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([guestId])
+}
+
+model Order {
+  id             String        @id @default(cuid())
+  number         String        @unique
+  accessToken    String        @unique
+  userId         String?
+  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email          String
+  phone          String
+  status         OrderStatus   @default(PENDING)
+  paymentMethod  PaymentMethod
+  paymentStatus  PaymentStatus @default(UNPAID)
+  stripeSession  String?       @unique
+  subtotal       Int
+  deliveryFee    Int
+  codFee         Int           @default(0)
+  discount       Int           @default(0)
+  total          Int
+  discountCode   String?
+  deliveryMethod String        @default("standard")
+  shipping       Json
+  notes          String?
+  items          OrderItem[]
+  events         OrderEvent[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model OrderItem {
+  id         String       @id @default(cuid())
+  orderId    String
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId  String?
+  product    Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  designId   String?
+  name       String
+  style      HoodieStyle
+  size       String
+  colorName  String
+  colorHex   String
+  quantity   Int
+  unitPrice  Int
+  /// Frozen copy of the design at purchase time (layers + zone specs + price breakdown)
+  design     Json?
+  /// zone -> asset id (print-ready PNG, immutable)
+  printFiles Json?
+  previewId  String?
+}
+
+model OrderEvent {
+  id        String      @id @default(cuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  note      String?
+  actor     String?
+  createdAt DateTime    @default(now())
+}
+
+model Discount {
+  id          String       @id @default(cuid())
+  code        String       @unique
+  type        DiscountType
+  value       Int // percent (1-100) or cents
+  minSubtotal Int          @default(0)
+  maxUses     Int?
+  uses        Int          @default(0)
+  active      Boolean      @default(true)
+  expiresAt   DateTime?
+  createdAt   DateTime     @default(now())
+}
+
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  subject   String
+  message   String
+  createdAt DateTime @default(now())
+}
