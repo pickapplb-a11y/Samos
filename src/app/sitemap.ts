@@ -2,7 +2,8 @@ import type { MetadataRoute } from "next";
 import { db } from "@/lib/db";
 import { SITE } from "@/lib/site";
 
-export const revalidate = 3600;
+// Rendered at request time: the database is not reachable during the hosting build step.
+export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const products = await db.product.findMany({ where: { active: true }, select: { slug: true, updatedAt: true } });

@@ -32,6 +32,26 @@ npm test                          # unit: constraints, pricing, schema, SVG sani
 npm run test:e2e                  # end-to-end API flow against a running server
 ```
 
+## Deploy on Railway
+
+`railway.json` sets everything up: build `npm run build`, start `npm run start:prod`. Start syncs the schema, seeds the store **only if the database is empty**, then starts Next.js.
+
+1. railway.com → New Project → **Deploy from GitHub repo** → pick this repo.
+2. In the project: **+ Create → Database → PostgreSQL**.
+3. App service → **Settings → Networking → Generate Domain**.
+4. App service → **Volumes → + New Volume**, mount path `/data`. Customer uploads and print files live here.
+5. App service → **Variables**:
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
+| `AUTH_SECRET` | 64 random characters (e.g. `openssl rand -hex 32`) |
+| `NEXT_PUBLIC_SITE_URL` | `https://<your-domain>.up.railway.app` |
+| `STORAGE_DIR` | `/data` |
+| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | your admin login (used on first boot) |
+
+Railway redeploys on every push to `main`.
+
 ## What's where
 
 | Area | Path |
